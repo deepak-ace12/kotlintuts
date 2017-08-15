@@ -436,6 +436,80 @@ what you are"""
     // Default parameters work the regular way
 
 
+    /* Generic functions
+        If we have a function for which we don't want to restrict the type of
+        objects that it can take as input and output, there are two way to do it.
+    */
+
+    fun generic_fun1(param1: Any, param2: Any, param3:Any): Any {
+        println("Do something with param1, param2, param3")
+    }
+
+    /*
+
+    Casting Rule:
+        Sub-types can be casted to Super-types
+        Super-type cannot be casted to a sub-type
+
+    This works because any input parameter will be cast into "Any"
+
+    However, the output type will always be "Any", which cannot be casted
+    into anything else (run time exception ClassCastException)
+
+    The way to solve this is using Generics in functions
+    */
+
+    fun <T> generic_fun2(param1: T, param2: T, param3: T): T {
+        println("Do something with param1, param2, param3")
+        return param1
+    }
+
+    fun <K, V> generic_fun3(param1:K, param2:V): V {
+        println("Do something with param1, param2")
+        return param2
+    }
+
+    /*
+    Usage:
+        generic_fun2(10, 11, 12)    // inferred type is Int
+
+        Interesting thing to note is that whether we use param1: "Any" or "param1: T"
+        we can only call those methods on param1 which are defined in "Any" or T
+        Since "T" is the most generic template, its just another way to say "Any"
+
+        fun <T> gen_fun(param1: T, param2: T) = param1 + param2   // Compile time error
+
+            - Error, since "plus" is not defined for "Any"
+
+        fun <T> gen_fun(param1: T, param2: T) = param1.toString() + param2.toString()
+
+            - Works, since "toString" is defined in "Any"
+
+        So whats the difference?
+        The real use case is with upper-bounds. We can tell the compiler that T can be of one
+        and more possible types
+    */
+
+    fun <T : Comparable<T>>min(first: T, second: T): T {
+        val k = first.compareTo(second)
+        return if (k <= 0) first else second
+    }
+
+    /*
+    Method min will take any object which extends Comparable interface (gives a compareTo method)
+    Anything else will give compile time error
+    Usage:
+        min(5, 8)
+        min(5, "8")     // Error, both have to be of same time
+
+    You can specify multiple bounds too
+    */
+
+    fun <T>minSerializable(first: T, second: T): T
+            where T : Comparable<T>,T : Serializable {
+        val k = first.compareTo(second)
+        return if (k <= 0) first else second
+    }
 
 }
 
