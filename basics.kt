@@ -3,6 +3,8 @@
  */
 package learn.kotlin.basics
 
+import java.io.File
+
 fun main(args: Array<String>) {
     println("Lets get started with Kotlin!")
 
@@ -434,9 +436,116 @@ what you are"""
     */
 
     // Default parameters work the regular way
+    // VarArgs : Python like, but better
+
+    fun multiprint(prefix: String, vararg strings: String, suffix: String): Unit {
+        println(prefix)
+        for (string in strings)
+            println(string)
+        println(suffix)
+    }
+    // Usage: suffix is always named
+    multiprint("Twinkle", "Twinkle", "Little", suffix="Star!")
+
+    // Spread operator : behaves like * in python, when you pass array to function
+    val strings = arrayOf("Twinkle", "Twinkle", "Little", "Star!")
+    multiprint("Start", *strings, suffix = "End")
+
+    // Apply : To apply a method of an instance and mimic chaining
+
+    // Regular code
+    val task = Runnable { println("Running") }
+    val thread = Thread(task)
+    thread.setDaemon(true)
+    thread.start()
+
+    // Kotlin code
+    val task = Runnable { println("Running") }
+    val thread = Thread(task).apply { setDaemon(true) }.start()
 
 
-    /* Generic functions
+    // "let" the magic begin
+
+    File("a.txt").let { it ->
+        // the file is now in the variable "it"
+    }
+
+    /*
+    This is very useful when you want to execute a code only
+    if there are non-nullable values. for e.g.
+
+        findUser(id)?.let {
+            // only run if findUser() returned a non null value
+        }
+
+    This is awesome, since you are not using a variable to store the
+    output of fileUser and then check it for nullability
+    Another form is:
+
+        findUser(id)?.let { user ->
+            user.apply {
+                sendMail()
+                markEvent()
+            }
+            // only run if findUser() returned a non null value
+        }
+    */
+
+    /*
+        "with statements" : Take a instance and inside the closure to apply
+        all methods on the instance
+
+        val instance = with(instance) {       // Optional to assign the output to anything
+            instanceMethod1()
+            instanceMethod2()
+            instanceMethod3()
+            this                              // return the same back - Also Optional
+        }
+
+        Also, achieved by
+
+        val instance = Class().apply {
+            instanceMethod1()
+            instanceMethod2()
+            instanceMethod3()
+        }
+    */
+
+    /*
+        "run statements": This is a combo of "with" and "let"
+    */
+
+    /*
+        Confused between let, with, run etc. Refer:
+        https://medium.com/@tpolansk/the-difference-between-kotlins-functions-let-apply-with-run-and-else-ca51a4c696b8
+    */
+
+    /*
+        "lazy evaluation"
+        fun readStringFromDatabase(): String = ... // expensive operation
+        val lazyString = lazy { readStringFromDatabase() }
+
+        val string = lazyString.value
+
+
+        "repeat"
+
+        repeat(10, { println("Hello") })  // second argument is a lambda
+
+
+        "require/assert/check"
+
+        Require: throws an exception and it is used to ensure that
+                arguments match the input conditions
+        Assert: throws an AssertionException exception and it is
+                used to ensure that our internal state is consistent
+        Check: throws an IllegalStateException exception and it is
+                also used for internal state consistency
+    */
+
+
+    /*
+        Generic functions
         If we have a function for which we don't want to restrict the type of
         objects that it can take as input and output, there are two way to do it.
     */
@@ -509,6 +618,202 @@ what you are"""
             where T : Comparable<T>,T : Serializable {
         val k = first.compareTo(second)
         return if (k <= 0) first else second
+    }
+
+    // Generic functions can use generics to do generic list things
+
+    fun <E> drop(k: Int, list:List<E>): List<E> {
+        val newSize = list.size - k
+        when {
+            newSize <= 0 -> return emptyList<E>()
+            else -> {
+                var newList = ArrayList<E>(newSize)
+                for(index in k..list.size){
+                    newList.add(list[index])
+                }
+                return newList
+            }
+        }
+    }
+
+    /*
+    The problem with this approach is chaining, we will do
+    reverse(take(3, drop(2, list))), to do it the better way
+    list.drop(2).take(3).reverse(), we do the following
+    */
+
+    fun <E> List<E>.drop(k: Int): List<E> {
+        val resultSize = size - k
+        when {
+            resultSize <= 0 -> return emptyList<E>()
+            else -> {
+                val list = ArrayList<E>(resultSize)
+                for (index in k..size - 1) {
+                    list.add(this[index])            // this refers to the calling list
+                }
+                return list
+            }
+        }
+    }
+
+    /*
+    You can define extension functions inside a class in which case they will be
+    available only inside the class
+    */
+
+    /*
+    Infix functions: When the operator is placed in the middle, e.g.
+    */
+
+    infix fun String.goingTo(toPlace:String): String {
+        println("Going from ${this} to ${toPlace} now")
+    }
+
+    // Usage
+    val whatYouDoing = "Mumbai" goingTo "Delhi"
+
+    /* Operator overloading
+        Operators are defined as class methods with operator keyword.
+        You can overload only specific operators with method names as below
+
+        Operation       Function name
+        a + b			a.plus(b)
+        A – b			a.minus(b)
+        A * b			a.times(b)
+        A / b			a.div(b)
+        A & b			a.mod(b)
+        a..b			a.rangeTo(b)
+        +a              a.unaryPlus()
+        -a              a.unaryMinus()
+        !a              a.not()
+
+     Example implementation on Matrix plus operator
+    */
+
+    class Matrix(val a: Int, val b: Int, val c: Int, val d: Int) {
+        operator fun plus(matrix: Matrix): Matrix {
+            return Matrix(a + matrix.a, b + matrix.b, c + matrix.c, d +
+                    matrix.d)
+        }
+    }
+
+    // Usage
+    val m1 = Matrix(1, 2, 3, 4)
+    val m2 = Matrix(5, 6, 7, 8)
+    val m3 = m1 + m2
+
+    /* Special operators
+
+        in/contains : 3 in arrayOf(1, 2, 3) <=> arrayOf(1, 2, 3).contains(3)
+
+        [] operator is implemented using get and set
+        example:
+    */
+
+    enum class Piece {
+        Empty, Pawn, Bishop, Knight, Rook, Queen, King
+    }
+    class ChessBoard() {
+        private val board = Array<Piece>(64, { Piece.Empty })
+
+        operator fun get(rank: Int, file: Int): Piece = board[file * 8 + rank]
+
+        operator fun set(rank: Int, file: Int, value: Piece): Unit {
+            board[file * 8 + rank] = value
+        }
+    }
+
+    // Usage:
+
+    val board = ChessBoard()
+    board[0, 4] = Piece.Queen
+    println(board[0, 4])
+
+    /*
+    Comparison operators
+        All operators >, >=, <, <= require compareTo to be implemented
+        This function must return an Int and must be consistent with the Comparator
+interface in Java.
+        example
+    */
+
+    class BingoNumber(val name: String, val age: Int) {
+        operator fun compareTo(other: BingoNumber): Int {
+            return when {
+                age < other.age -> -1
+                age > other.age -> 1
+                else -> 0
+            }
+        }
+    }
+
+    // Usage
+    val a = BingoNumber("Key to the Door", 21)
+    val b = BingoNumber("Jump and Jive", 35)
+    println(a < b) // true
+    println(b > a) // false
+
+    /*
+    Assign operators
+        Operation       Function name
+        a += b			a.plusAssign(b)
+        a -= b			a.minusAssign(b)
+        a *= b			a.timesAssign(b)
+        a /= b			a.divAssign(b)
+        a %= b			a.modAssign(b)
+
+    This is super cool, I can actually create classes with complex assign operators on them
+    example
+    */
+
+    class Counter(var k: Int) {
+        operator fun plusAssign(j: Int): Unit {
+            k += j
+        }
+    }
+    var counter = Counter(1)
+    counter += 2
+
+    /*
+    NOTE: All operator overloading works from Java to Kotlin if function signatures match
+    (since Java has no operator overloading, the function name and signature is matched to determine
+    if it can be used in Kotlin as an operator
+    */
+
+    // Function literals : Simple functions
+    // To define a function we can put an expression between { } and it becomes a function
+    val printSomething = { print("Something")}
+    printSomething()
+
+    // If Function literals need a input:
+    val ldouble = { n: Int -> n * n}
+    ldouble(2)
+    // If Kotlin can infer "n"'s type, you don't have to define the type
+
+    /*
+    Tail recursion
+
+        There are multiple ways to write a recursive function. However, if a recursive function
+        keeps a stack of all the calls before it, then its not very memory efficient.
+        A tail recursion is when a recursive function's last call is a call to the same function
+        so that the compiler need not maintain a stack.
+        To tell the compile not to keep a stack, we use the keywork tailrec
+    */
+
+    // factorial recursive implemented bad
+    fun factorial(k: Int): Int {
+        if (k == 0) return 1
+        else return k * fact(k - 1)        // Still need to keep the function call on stack
+                                              // because the result needs to be multiplied
+    }
+
+    // Tail recursive implementation
+    fun factorialImproved(k: Int): Int {
+        tailrec fun factTail(m: Int, n: Int): Int { // tell the compiler to not maintain a stack
+            if (m == 0) return n
+            else return factTail(m - 1, m * n)  // Function keep calling itself, no stack required
+        }
+        return factTail(k, 1)
     }
 
 }
