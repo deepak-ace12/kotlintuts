@@ -76,7 +76,7 @@ fun main(args: Array<String>) {
         foo(1.0, 2.0, { a, b -> Math.pow(a, b) })
 
     Kotlin way:
-        foo(1.0, 2.0, Math::pow })
+        foo(1.0, 2.0, Math::pow )   // pass the reference of Math.pow
 
     Extension function:
         fun Int.isOdd(): Boolean = this % 1 == 0
@@ -187,7 +187,7 @@ fun main(args: Array<String>) {
     code generation use the word "noinline" e.g.
     */
 
-    inline fun <T : AutoCloseable, U, V> withResourceNew(resource: T, (T) -> U, noinline after: (U) -> V): V {
+    inline fun <T : AutoCloseable, U, V> withResourceNew(resource: T, before: (T) -> U, noinline after: (U) -> V): V {
         val u = try {
             before(resource)
         } finally {
@@ -242,7 +242,7 @@ fun main(args: Array<String>) {
         val map = ConcurrentHashMap<A, R>()
         return {
             a -> map.getOrPut(a) {
-            this.invoke(a)
+            this.invoke(a)              // this calls the receiver which is a function
         }
         }
     }
@@ -275,30 +275,31 @@ fun main(args: Array<String>) {
     call two different functions depending on the value of Either(Null/Error or Success)
 
     Lets implement "Either" in Kotlin
+    */
 
-        sealed class Either<out L, out R>
-        class Left<out L>(value: L): Either<L, Nothing>()
-        class Right<out R>(value: R): Either<Nothing, R>()
+        sealed class Either<out L, out R>                   // Either defined with L and R types
+        class Left<out L>(value: L): Either<L, Nothing>()   // Either is Left when R is Nothing
+        class Right<out R>(value: R): Either<Nothing, R>()  // Either is Right when L is Nothing
 
-    Lets implement fold:
+    // Lets implement fold
 
         sealed class Either<out L, out R> {
             fun <T> fold(lfn: (L) -> T, rfn: (R) -> T): T = when (this) {
-                is Left -> lfn(this.value)
-                is Right -> rfn(this.value)
+                is Left -> lfn(this.value)      // When Either is Left, call lfn
+                is Right -> rfn(this.value)     // When Either is Right, call rfn
             }
         }
 
-    Usage:
+    // Usage:
 
         class User(val name: String, val admin: Boolean)
-        object Service Account
+        object ServiceAccount
         class Address(val town: String, val postcode: String)
 
         fun getCurrentUser(): Either<ServiceAccount, User> = ... // Gets User from a service
         fun getUserAddresses(user: User): List<Address> = ...    // Gets Address from a service
 
-        ServiceAccount is a anonymous user.
+        // ServiceAccount is a anonymous user.
 
         val addresses = getCurrentUser().fold({
                 emptyList<Address>()
@@ -307,37 +308,236 @@ fun main(args: Array<String>) {
             }
         )
 
+    /*
     Looks cool and simple to implement
 
-
     Projections: If you want to attach cool functional stuff like map, filter to "Either", we can do that.
-    We will implement two projections, ValueProjection and EmptyProjection (noOp)
+    This looks complicated so look carefully.
+
+    Just that way we implemented "fold" in "Either"
+    we need to implement projections so that dependent on Left or Right, we can call a projection on it or
+    just ignore it. That is, we decide that for leftProjections, we will call proper map, else we will ignore
+    or vice-versa.
+
+    Updated Either:
+    */
+
+        sealed class Either<out L, out R> {
+            fun <T> fold(lfn: (L) -> T, rfn: (R) -> T): T = when (this) {
+                is Left -> lfn(this.value)
+                is Right -> rfn(this.value)
+            }
+            fun leftProjection(): Projection<L> = when (this) { // If we ask for leftProjection, and we get Right
+                is Left -> ValueProjection(this.value)          // value, then do noOp
+                is Right -> EmptyProjection<L>()
+            }
+            fun rightProjection(): Projection<R> = when (this) {
+                is Left -> EmptyProjection<R>()
+                is Right -> ValueProjection(this.value)
+            }
+        }
+
+    /*
+    The way we will choose to implement this is to create two projection subclasses:
+    The ValueProjection will implement the functions (map, filter etc.)
+    The EmptyProjection will implement no-ops.
+
+    As implemented above, dependent on which projection (left or right), Value and Empty
+    projections will be executed
 
     Projection supertype:
+    */
 
         sealed class Projection<out T> {
             abstract fun <U> map(fn: (T) -> U): Projection<U>
             abstract fun getOrElse(or: () -> T): T
         }
 
+    /*
+    We're going to start with two functions for now: map , which will transform the value if the
+    projection is one we are interested in, and getOrElse , which will return the value or apply
+    a default function.
+    */
+
         class ValueProjection<out T>(val value: T) : Projection<T>() {
             override fun <U> map(fn: (T) -> U): Projection<U> =
                 ValueProjection(fn(value))
             override fun getOrElse(or: () -> T): T = value
         }
-class EmptyProjection<out T> : Projection<T>() {
-override fun <U> map(fn: (T) -> U): Projection<U> =
-EmptyProjection<U>()
-override fun getOrElse(or: () -> T): T = or()
-}
-fun <T> Projection<T>.getOrElse(or: () -> T): T = when (this) {
-is EmptyProjection -> or()
-is ValueProjection -> this.value
-}
 
+        class EmptyProjection<out T> : Projection<T>() {
+            override fun <U> map(fn: (T) -> U): Projection<U> =
+                    EmptyProjection<U>()
+            override fun getOrElse(or: () -> T): T = or()
+        }
 
+        fun <T> Projection<T>.getOrElse(or: () -> T): T = when (this) {
+            is EmptyProjection -> or()
+            is ValueProjection -> this.value
+        }
 
+    /*
+    getOrElse is implemented as an extension function on Projection itself
+    because the function signature requires that T is an output in the or
+    function. Check klassVariance.kt
     */
+
+    // Usage:
+    val postcodes = getCurrentUser().rightProjection()      // Interested in rightProjection only
+        .map { getUserAddresses(it) }
+        .map { addresses.map { it.postcode } }
+        .getOrElse { emptyList() }
+    // If the Either returned was not a Right value, then the maps would have no effect.
+
+
+    // Custom DSLs: Using infix, we can create pretty magical DSLs.
+    // Lets try creating DSLs for testing framework
+
+    fun Any.shouldEqual(other: Any): Unit {
+        if (this != other)
+            throw RuntimeException("$this was not equal to $other")
+    }
+    // Usage: "foo" shouldEqual "bar"
+
+    /*
+    Usage:
+        listOfNames.contains("george") shouldEqual true
+    But this looks sad, it should read more like:
+        listOfNames shouldContain "george"
+    */
+
+    infix fun <E> Collection<E>.shouldContain(element: E): Unit {
+        if (!this.contains(element))
+            throw RuntimeException("Collection did not contain $element")
+    }
+    // Usage: listOfNames shouldContain 10.0
+
+    /*
+    How about: listOfNames shouldContain "george" or listOfNames should beEmpty()
+        infix fun Unit.or(other: Unit): Unit
+
+    would not work because our assertions throw an exception, the left-hand side
+    could have already thrown an exception before or is invoked, meaning we
+    can't catch it. In which case, we need to invoke the assertions after they have
+    been combined.
+    At the same time, can we avoid duplicating the repeated left-hand side(listOfNames)?
+
+    Lets define a type called Matcher, which can help catch the exception and then
+    apply "or" on it
+    */
+
+    // The interface
+    interface Matcher<T> {
+        fun test(lhs: T): Unit
+    }
+
+    // The implementation for contain and beEmpty
+    fun <T> contain(rhs: T) = object : Matcher<Collection<T>> {
+        override fun test(lhs: Collection<T>): Unit {
+            if (!lhs.contains(rhs))
+                throw RuntimeException("Collection did not contain $rhs")
+        }
+    }
+    fun <T> beEmpty() = object : Matcher<Collection<T>> {
+        override fun test(lhs: Collection<T>) {
+            if (lhs.isNotEmpty())
+                throw RuntimeException("Collection should be empty")
+        }
+    }
+
+    // define "should" to run the matcher tests
+    infix fun <T> T.should(matcher: Matcher<T>) {
+        matcher.test(this)
+    }
+
+    // Add "or" to the Matcher interface
+    interface Matcher<T> {
+        fun test(lhs: T): Unit
+        infix fun or(other: Matcher<T>): Matcher<T> = object : Matcher<T> {
+            override fun test(lhs: T) {
+                try {
+                    this@Matcher.test(lhs)
+                } catch (e: RuntimeException) {
+                    other.test(lhs)
+                }
+            }
+        }
+    }
+
+    // We can use the above to write
+    listOfNames should (contain("george") or beEmpty())
+
+    // Instead of defining an "and", we can also write
+    listOfNames should {
+        contain("george")
+        beEmpty()
+    }
+
+    // Validation and Error Accumulation
+
+    // VERSION 1
+    //Lets start with the base clases:
+    sealed class Validation
+    object Valid: Validation()
+    class Invalid(val errors: List<String>) : Validation<Nothing>() {
+        companion object {
+            operator fun invoke(error: String) = Invalid(listOf(error))
+        }
+    }
+
+    // Note: operator invoke gets call then you call the class e.g. Invalid("Error goes here")
+    // will call the invoke method
+
+    // Implementating validation classes:
+
+    class Student(val name: String, val studentNumber: String, val String)
+
+    fun isValidName(name: String): Validation {
+        return if (name.trim().length > 2)
+            Valid
+        else
+            Invalid("Name $name is too short")
+    }
+    fun isValidStudentNumber(studentNumber: String): Validation {
+        return if (studentNumber.all { Character.isDigit(it) })
+            Valid)
+        else
+        Invalid("Student number must be only digits: $studentNumber")
+    }
+    fun isValidEmailAddress(email: String): Validation {
+        return if (email.contains("@"))
+            Valid
+        else
+            Invalid("Email must contain an '@' symbol")
+    }
+
+    // VERSION 2: Lets implement error accumulation with plus operator
+    sealed class Validation {
+        abstract infix operator fun plus(other: Validation): Validation
+    }
+    class Invalid(val errors: List<String>) : Validation() {
+        companion object {
+            operator fun invoke(error: String) = Invalid(listOf(error))
+        }
+        override fun plus(other: Validation): Validation = when (other) {
+            is Invalid -> Invalid(this.errors + other.errors)
+            is Valid -> this
+        }
+    }
+    object Valid : Validation() {
+        override fun plus(other: Validation): Validation = when (other) {
+            is Invalid -> other
+            is Valid -> this
+        }
+    }
+
+    // Usage:
+    val validation = (
+        isValidName(student.name) +
+        isValidStudentNumber(student.studentNumber) +
+        isValidEmailAddress(student.email)
+    )
+
 
 
 

@@ -37,7 +37,7 @@ fun main(args: Array<String>) {
 
     // Literal Constants
 
-    Explicit declaration
+    // Explicit declaration
     var long: Long = 1234L
     var hexadecimal: Int = 0xFFFFFF
     var binary:Int = 0b0000111100001111
@@ -285,11 +285,11 @@ what you are"""
     // As a statement
     var x = 3
     when(x) {
-        1 -> print("x == 1"
-                2 -> print("x == 2"
-            else -> {
-        print("x is not 1 or 2")
-    }
+        1 -> print("x == 1")
+        2 -> print("x == 2")
+        else -> {
+            print("x is not 1 or 2")
+        }
     }
 
     // As an expression
@@ -648,7 +648,7 @@ what you are"""
             resultSize <= 0 -> return emptyList<E>()
             else -> {
                 val list = ArrayList<E>(resultSize)
-                for (index in k..size - 1) {
+                for (index in k until size - 1) {
                     list.add(this[index])            // this refers to the calling list
                 }
                 return list
@@ -803,8 +803,8 @@ interface in Java.
     // factorial recursive implemented bad
     fun factorial(k: Int): Int {
         if (k == 0) return 1
-        else return k * fact(k - 1)        // Still need to keep the function call on stack
-                                              // because the result needs to be multiplied
+        else return k * fact(k - 1)         // Still need to keep the function call on stack
+                                            // because the result needs to be multiplied
     }
 
     // Tail recursive implementation
